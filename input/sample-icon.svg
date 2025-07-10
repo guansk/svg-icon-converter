@@ -1,0 +1,20 @@
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景圆形 -->
+  <circle cx="50" cy="50" r="45" fill="url(#grad1)" stroke="#ffffff" stroke-width="2"/>
+  
+  <!-- 星形图标 -->
+  <polygon points="50,20 58,38 78,38 62,50 68,68 50,58 32,68 38,50 22,38 42,38" 
+           fill="#ffffff" 
+           stroke="#f0f0f0" 
+           stroke-width="1"/>
+  
+  <!-- 内部小圆点 -->
+  <circle cx="50" cy="50" r="4" fill="#ffffff" opacity="0.8"/>
+</svg> 
