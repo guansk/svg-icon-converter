@@ -23,8 +23,36 @@ echo "✅ 依赖安装完成"
 echo "🚀 开始转换..."
 echo ""
 
-# 运行转换器
-python3 convert.py
+# 提供选择菜单
+echo ""
+echo "请选择操作:"
+echo "[1] 直接转换 (推荐)"
+echo "[2] 先质量诊断，再转换"
+echo "[3] 仅质量诊断"
+echo ""
+read -p "请输入选择 (1-3): " choice
+
+case $choice in
+    2)
+        echo ""
+        echo "🔍 开始质量诊断..."
+        python3 quality_check.py
+        echo ""
+        read -p "按回车键继续转换..."
+        echo ""
+        echo "🚀 开始转换..."
+        python3 convert.py
+        ;;
+    3)
+        echo ""
+        echo "🔍 开始质量诊断..."
+        python3 quality_check.py
+        ;;
+    *)
+        echo "🚀 开始转换..."
+        python3 convert.py
+        ;;
+esac
 
 echo ""
-echo "转换完成！" 
+echo "操作完成！" 

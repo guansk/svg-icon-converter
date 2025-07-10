@@ -8,7 +8,7 @@ SVG图标转换器
 import os
 import sys
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageOps
 import cairosvg
 from io import BytesIO
 
@@ -37,21 +37,37 @@ class SVGIconConverter:
         self.output_dir.mkdir(exist_ok=True)
         
     def svg_to_png(self, svg_path, size):
-        """将SVG转换为指定尺寸的PNG"""
+        """将SVG转换为指定尺寸的PNG - 优化版本"""
         try:
-            # 使用cairosvg将SVG转换为PNG字节流
+            # 使用更高的DPI和更好的渲染选项
+            dpi = max(72, size * 2)  # 动态调整DPI，小图标使用更高DPI
+            
+            # 使用cairosvg将SVG转换为PNG字节流，使用优化参数
             png_data = cairosvg.svg2png(
                 url=str(svg_path),
                 output_width=size,
-                output_height=size
+                output_height=size,
+                dpi=dpi,
+                background_color=None,  # 保持透明背景
             )
             
             # 使用PIL加载PNG数据
             image = Image.open(BytesIO(png_data))
             
-            # 确保是RGBA模式
+            # 确保是RGBA模式以保持透明度
             if image.mode != 'RGBA':
                 image = image.convert('RGBA')
+            
+            # 对小尺寸图标进行锐化处理
+            if size <= 32:
+                from PIL import ImageFilter
+                # 轻微锐化，保持细节
+                image = image.filter(ImageFilter.UnsharpMask(radius=0.5, percent=150, threshold=0))
+            
+            # 确保图像尺寸准确
+            if image.size != (size, size):
+                # 使用高质量重采样
+                image = image.resize((size, size), Image.Resampling.LANCZOS)
                 
             return image
             
@@ -69,13 +85,36 @@ class SVGIconConverter:
         
         # 创建ICO文件
         ico_buffer = BytesIO()
-        sorted_images[0].save(
-            ico_buffer,
-            format='ICO',
-            sizes=[(img.size[0], img.size[1]) for img in sorted_images]
-        )
-        ico_buffer.seek(0)
-        return ico_buffer.getvalue()
+        try:
+            # 使用第一个图像作为基础，添加所有尺寸
+            sorted_images[0].save(
+                ico_buffer,
+                format='ICO',
+                sizes=[(img.size[0], img.size[1]) for img in sorted_images],
+                # 添加质量选项
+                optimize=True
+            )
+            ico_buffer.seek(0)
+            return ico_buffer.getvalue()
+        except Exception as e:
+            print(f"创建ICO文件失败: {e}")
+            return None
+    
+    def save_png_optimized(self, image, path):
+        """优化PNG保存，保持最佳质量"""
+        try:
+            # 使用优化选项保存PNG
+            image.save(
+                path, 
+                "PNG", 
+                optimize=True,
+                compress_level=6,  # 平衡文件大小和质量
+                pnginfo=None  # 不保存元数据，减小文件大小
+            )
+            return True
+        except Exception as e:
+            print(f"保存PNG失败 {path}: {e}")
+            return False
     
     def process_svg_file(self, svg_path):
         """处理单个SVG文件"""
@@ -92,8 +131,10 @@ class SVGIconConverter:
             image = self.svg_to_png(svg_path, size)
             if image:
                 png_path = output_subdir / f"{filename_base}-{size}x{size}.png"
-                image.save(png_path, "PNG")
-                print(f"  ✓ {png_path.name}")
+                if self.save_png_optimized(image, png_path):
+                    print(f"  ✓ {png_path.name}")
+                else:
+                    print(f"  ❌ {png_path.name}")
         
         # 生成特殊用途图标
         print("生成特殊用途图标...")
@@ -101,8 +142,10 @@ class SVGIconConverter:
             image = self.svg_to_png(svg_path, size)
             if image:
                 special_path = output_subdir / special_name
-                image.save(special_path, "PNG")
-                print(f"  ✓ {special_name}")
+                if self.save_png_optimized(image, special_path):
+                    print(f"  ✓ {special_name}")
+                else:
+                    print(f"  ❌ {special_name}")
         
         # 生成ICO文件
         print("生成ICO文件...")
@@ -116,16 +159,21 @@ class SVGIconConverter:
             ico_data = self.create_ico(ico_images)
             if ico_data:
                 ico_path = output_subdir / "favicon.ico"
-                with open(ico_path, 'wb') as f:
-                    f.write(ico_data)
-                print(f"  ✓ favicon.ico")
+                try:
+                    with open(ico_path, 'wb') as f:
+                        f.write(ico_data)
+                    print(f"  ✓ favicon.ico")
+                except Exception as e:
+                    print(f"  ❌ favicon.ico: {e}")
         
         # 生成单独的favicon.png (32x32)
         favicon_png = self.svg_to_png(svg_path, 32)
         if favicon_png:
             favicon_png_path = output_subdir / "favicon.png"
-            favicon_png.save(favicon_png_path, "PNG")
-            print(f"  ✓ favicon.png")
+            if self.save_png_optimized(favicon_png, favicon_png_path):
+                print(f"  ✓ favicon.png")
+            else:
+                print(f"  ❌ favicon.png")
     
     def convert_all(self):
         """转换所有SVG文件"""
@@ -154,6 +202,9 @@ class SVGIconConverter:
         
         # 显示输出文件说明
         self.show_output_guide()
+        
+        # 显示质量优化说明
+        self.show_quality_tips()
     
     def show_output_guide(self):
         """显示输出文件使用说明"""
@@ -173,9 +224,18 @@ class SVGIconConverter:
 <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
 """)
+    
+    def show_quality_tips(self):
+        """显示质量优化提示"""
+        print("\n💡 质量优化提示:")
+        print("• 已自动应用高质量渲染和抗锯齿")
+        print("• 小尺寸图标已进行锐化处理")
+        print("• 保持了原始透明度和颜色")
+        print("• 如果效果仍不理想，请检查原始SVG文件质量")
+        print("• 建议原始SVG使用简洁的矢量图形，避免过于复杂的效果")
 
 def main():
-    print("🎨 SVG图标转换器")
+    print("🎨 SVG图标转换器 - 高质量版本")
     print("将SVG转换为前端开发所需的各种格式和尺寸")
     print("=" * 50)
     
