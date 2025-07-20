@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-SVG图标转换器
-将SVG文件转换为前端开发所需的各种尺寸的ICO和PNG文件
+SVG/PNG图标转换器
+将SVG或PNG文件转换为前端开发所需的各种尺寸的ICO和PNG文件
 """
 
 import os
@@ -75,6 +75,36 @@ class SVGIconConverter:
             print(f"转换SVG失败 {svg_path} -> {size}px: {e}")
             return None
     
+    def png_to_resized_png(self, png_path, size):
+        """将PNG转换为指定尺寸的PNG - 优化版本"""
+        try:
+            # 加载原始PNG文件
+            with Image.open(png_path) as original_image:
+                # 确保是RGBA模式以保持透明度
+                if original_image.mode != 'RGBA':
+                    image = original_image.convert('RGBA')
+                else:
+                    image = original_image.copy()
+                
+                # 如果原始尺寸已经是目标尺寸，直接返回副本
+                if image.size == (size, size):
+                    return image
+                
+                # 使用高质量重采样调整尺寸
+                image = image.resize((size, size), Image.Resampling.LANCZOS)
+                
+                # 对小尺寸图标进行锐化处理
+                if size <= 32:
+                    from PIL import ImageFilter
+                    # 轻微锐化，保持细节
+                    image = image.filter(ImageFilter.UnsharpMask(radius=0.5, percent=150, threshold=0))
+                
+                return image
+                
+        except Exception as e:
+            print(f"转换PNG失败 {png_path} -> {size}px: {e}")
+            return None
+    
     def create_ico(self, images):
         """创建包含多个尺寸的ICO文件"""
         if not images:
@@ -119,7 +149,7 @@ class SVGIconConverter:
     def process_svg_file(self, svg_path):
         """处理单个SVG文件"""
         filename_base = svg_path.stem
-        print(f"\n处理文件: {svg_path.name}")
+        print(f"\n处理SVG文件: {svg_path.name}")
         
         # 创建子目录
         output_subdir = self.output_dir / filename_base
@@ -175,26 +205,96 @@ class SVGIconConverter:
             else:
                 print(f"  ❌ favicon.png")
     
+    def process_png_file(self, png_path):
+        """处理单个PNG文件"""
+        filename_base = png_path.stem
+        print(f"\n处理PNG文件: {png_path.name}")
+        
+        # 创建子目录
+        output_subdir = self.output_dir / filename_base
+        output_subdir.mkdir(exist_ok=True)
+        
+        # 生成标准PNG尺寸
+        print("生成PNG文件...")
+        for size in self.png_sizes:
+            image = self.png_to_resized_png(png_path, size)
+            if image:
+                png_output_path = output_subdir / f"{filename_base}-{size}x{size}.png"
+                if self.save_png_optimized(image, png_output_path):
+                    print(f"  ✓ {png_output_path.name}")
+                else:
+                    print(f"  ❌ {png_output_path.name}")
+        
+        # 生成特殊用途图标
+        print("生成特殊用途图标...")
+        for special_name, size in self.special_icons.items():
+            image = self.png_to_resized_png(png_path, size)
+            if image:
+                special_path = output_subdir / special_name
+                if self.save_png_optimized(image, special_path):
+                    print(f"  ✓ {special_name}")
+                else:
+                    print(f"  ❌ {special_name}")
+        
+        # 生成ICO文件
+        print("生成ICO文件...")
+        ico_images = []
+        for size in self.ico_sizes:
+            image = self.png_to_resized_png(png_path, size)
+            if image:
+                ico_images.append(image)
+        
+        if ico_images:
+            ico_data = self.create_ico(ico_images)
+            if ico_data:
+                ico_path = output_subdir / "favicon.ico"
+                try:
+                    with open(ico_path, 'wb') as f:
+                        f.write(ico_data)
+                    print(f"  ✓ favicon.ico")
+                except Exception as e:
+                    print(f"  ❌ favicon.ico: {e}")
+        
+        # 生成单独的favicon.png (32x32)
+        favicon_png = self.png_to_resized_png(png_path, 32)
+        if favicon_png:
+            favicon_png_path = output_subdir / "favicon.png"
+            if self.save_png_optimized(favicon_png, favicon_png_path):
+                print(f"  ✓ favicon.png")
+            else:
+                print(f"  ❌ favicon.png")
+    
     def convert_all(self):
-        """转换所有SVG文件"""
+        """转换所有SVG和PNG文件"""
         self.ensure_directories()
         
-        # 查找所有SVG文件
+        # 查找所有SVG和PNG文件
         svg_files = list(self.input_dir.glob("*.svg"))
+        png_files = list(self.input_dir.glob("*.png"))
         
-        if not svg_files:
-            print("❌ 在input目录中没有找到SVG文件")
-            print(f"请将SVG文件放入: {self.input_dir.absolute()}")
+        total_files = len(svg_files) + len(png_files)
+        
+        if total_files == 0:
+            print("❌ 在input目录中没有找到SVG或PNG文件")
+            print(f"请将SVG或PNG文件放入: {self.input_dir.absolute()}")
             return
         
-        print(f"找到 {len(svg_files)} 个SVG文件")
+        print(f"找到 {len(svg_files)} 个SVG文件和 {len(png_files)} 个PNG文件")
         print("=" * 50)
         
+        # 处理SVG文件
         for svg_file in svg_files:
             try:
                 self.process_svg_file(svg_file)
             except Exception as e:
-                print(f"❌ 处理文件 {svg_file.name} 时出错: {e}")
+                print(f"❌ 处理SVG文件 {svg_file.name} 时出错: {e}")
+        
+        # 处理PNG文件
+        for png_file in png_files:
+            try:
+                self.process_png_file(png_file)
+            except Exception as e:
+                print(f"❌ 处理PNG文件 {png_file.name} 时出错: {e}")
         
         print("\n" + "=" * 50)
         print("✅ 转换完成！")
@@ -231,12 +331,13 @@ class SVGIconConverter:
         print("• 已自动应用高质量渲染和抗锯齿")
         print("• 小尺寸图标已进行锐化处理")
         print("• 保持了原始透明度和颜色")
-        print("• 如果效果仍不理想，请检查原始SVG文件质量")
-        print("• 建议原始SVG使用简洁的矢量图形，避免过于复杂的效果")
+        print("• SVG文件: 如果效果仍不理想，请检查原始SVG文件质量")
+        print("• PNG文件: 建议使用高分辨率的PNG作为输入以获得最佳质量")
+        print("• 建议原始文件使用简洁的图形设计，避免过于复杂的效果")
 
 def main():
-    print("🎨 SVG图标转换器 - 高质量版本")
-    print("将SVG转换为前端开发所需的各种格式和尺寸")
+    print("🎨 SVG/PNG图标转换器 - 高质量版本")
+    print("将SVG或PNG转换为前端开发所需的各种格式和尺寸")
     print("=" * 50)
     
     converter = SVGIconConverter()
