@@ -160,7 +160,7 @@ class SVGIconConverter:
         for size in self.png_sizes:
             image = self.svg_to_png(svg_path, size)
             if image:
-                png_path = output_subdir / f"{filename_base}-{size}x{size}.png"
+                png_path = output_subdir / f"icon-{size}x{size}.png"
                 if self.save_png_optimized(image, png_path):
                     print(f"  ✓ {png_path.name}")
                 else:
@@ -219,7 +219,7 @@ class SVGIconConverter:
         for size in self.png_sizes:
             image = self.png_to_resized_png(png_path, size)
             if image:
-                png_output_path = output_subdir / f"{filename_base}-{size}x{size}.png"
+                png_output_path = output_subdir / f"icon-{size}x{size}.png"
                 if self.save_png_optimized(image, png_output_path):
                     print(f"  ✓ {png_output_path.name}")
                 else:
@@ -314,7 +314,7 @@ class SVGIconConverter:
         print("├── apple-touch-icon.png - iOS Safari书签图标")
         print("├── android-chrome-*.png - Android Chrome图标")
         print("├── mstile-150x150.png   - Windows磁贴图标")
-        print("└── *-{size}x{size}.png  - 各种尺寸的通用图标")
+        print("└── icon-{size}x{size}.png - 各种尺寸的通用图标")
         
         print("\n🚀 前端使用示例:")
         print("""
